@@ -1,6 +1,6 @@
 import java.sql.*;
 
-public class Mysql {
+public class UserDatabase {
     // JDBC 驱动名及数据库 URL
     static final String JDBC_DRIVER = "com.mysql.cj.jdbc.Driver";
     static final String DB_URL = "jdbc:mysql://localhost:3306/chatdata?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
@@ -12,7 +12,7 @@ public class Mysql {
     private Connection conn;
 
     // 构造方法，用于初始化数据库连接
-    public Mysql() {
+    public UserDatabase() {
         try {
             // 注册 JDBC 驱动
             Class.forName(JDBC_DRIVER);
@@ -123,7 +123,7 @@ public class Mysql {
 
     // 测试方法
     public static void main(String[] args) {
-        Mysql db = new Mysql();
+        UserDatabase db = new UserDatabase();
 
         // 插入数据
         System.out.println("插入数据测试：");
