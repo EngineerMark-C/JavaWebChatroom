@@ -24,7 +24,11 @@ public class Mysql {
 
     // 插入用户
     public boolean insert(String name, String password) {
-        String sql = "INSERT INTO chatuser (name, password) VALUES (?, ?)";
+
+        if (isUsernameExists(name)) {
+            return false; // 用户名已存在
+        }
+        String sql = "INSERT INTO chatuser (name, create_time,password) VALUES (?, NOW(),?)";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, name);
             pstmt.setString(2, password);
@@ -34,6 +38,22 @@ public class Mysql {
             e.printStackTrace();
             return false;
         }
+    }
+
+    // 检查用户名是否已经存在
+    private boolean isUsernameExists(String name) {
+        String sql = "SELECT COUNT(*) FROM chatuser WHERE name = ?";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, name);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                int count = rs.getInt(1);
+                return count > 0; // 如果返回的 count 大于 0，表示用户名已经存在
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false; // 用户名不存在
     }
 
     // 插入消息
