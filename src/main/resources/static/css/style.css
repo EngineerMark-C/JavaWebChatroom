@@ -1,0 +1,271 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f0f2f5;
+}
+
+.panel {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.login-container {
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 400px;
+}
+
+.login-container h2 {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    color: #1a73e8;
+}
+
+.login-container input {
+    width: 100%;
+    padding: 0.8rem;
+    margin: 0.5rem 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+.login-container button {
+    width: 100%;
+    padding: 0.8rem;
+    margin: 0.5rem 0;
+    border: none;
+    border-radius: 4px;
+    background-color: #1a73e8;
+    color: white;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.login-container button:hover {
+    background-color: #1557b0;
+}
+
+.chat-container {
+    display: flex;
+    width: 100%;
+    height: 100vh;
+    background: white;
+}
+
+.sidebar {
+    width: 250px;
+    background: #f8f9fa;
+    border-right: 1px solid #ddd;
+    display: flex;
+    flex-direction: column;
+}
+
+.user-info {
+    padding: 1rem;
+    border-bottom: 1px solid #ddd;
+    background: #e9ecef;
+}
+
+.online-users {
+    padding: 1rem;
+    flex-grow: 1;
+    overflow-y: auto;
+}
+
+.online-users h3 {
+    margin-bottom: 1rem;
+    color: #495057;
+}
+
+.online-users ul {
+    list-style: none;
+}
+
+.online-users li {
+    padding: 0.5rem;
+    margin: 0.2rem 0;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.online-users li:hover {
+    background: #e9ecef;
+}
+
+.main-chat {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-messages {
+    padding: 20px;
+    overflow-y: auto;
+    height: calc(100vh - 200px);
+}
+
+.message {
+    max-width: 70%;
+    margin: 10px 0;
+    padding: 10px 15px;
+    border-radius: 15px;
+    word-wrap: break-word;
+}
+
+.message.sent {
+    margin-left: auto;
+    background-color: #007bff;
+    color: white;
+    border-top-right-radius: 5px;
+}
+
+.message.received {
+    margin-right: auto;
+    background-color: #e9ecef;
+    color: black;
+    border-top-left-radius: 5px;
+}
+
+.message.system {
+    max-width: 80%;
+    margin: 10px auto;
+    text-align: center;
+    background-color: #f8f9fa;
+    color: #6c757d;
+    font-size: 0.9em;
+    padding: 5px 15px;
+    border-radius: 20px;
+}
+
+.timestamp {
+    font-size: 0.8em;
+    margin-bottom: 2px;
+    opacity: 0.7;
+}
+
+.sender-name {
+    font-size: 0.9em;
+    margin-bottom: 2px;
+    font-weight: bold;
+}
+
+.message-content {
+    margin-top: 2px;
+}
+
+.chat-input {
+    padding: 1rem;
+    border-top: 1px solid #ddd;
+    display: flex;
+    gap: 0.5rem;
+}
+
+.chat-input input {
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+.chat-input input[type="text"] {
+    flex-grow: 1;
+}
+
+.chat-input button {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 4px;
+    background: #1a73e8;
+    color: white;
+    cursor: pointer;
+}
+
+.chat-input button:hover {
+    background: #1557b0;
+} 
+
+/* 侧边栏样式 */
+.sidebar {
+    width: 200px;
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-right: 1px solid #dee2e6;
+}
+
+.user-info {
+    padding: 10px;
+    border-bottom: 1px solid #dee2e6;
+    margin-bottom: 15px;
+}
+
+.online-users h3 {
+    font-size: 1.1em;
+    margin-bottom: 10px;
+}
+
+#userList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#userList li {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+#userList li:hover {
+    background-color: #e9ecef;
+}
+
+/* 接收者选择下拉框样式 */
+#receiverSelect {
+    padding: 8px;
+    margin-right: 10px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background-color: white;
+}
+
+/* 聊天输入区域样式 */
+.chat-input {
+    display: flex;
+    gap: 10px;
+    padding: 15px;
+    background-color: white;
+    border-top: 1px solid #dee2e6;
+}
+
+.chat-input input[type="text"] {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+}
+
+.chat-input button {
+    padding: 8px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.chat-input button:hover {
+    background-color: #0056b3;
+}

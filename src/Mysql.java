@@ -110,26 +110,38 @@ public class Mysql {
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, name);
             pstmt.setString(2, password);
+            
+            System.out.println("执行SQL: " + sql); // 添加调试日志
+            System.out.println("参数: name=" + name + ", password=" + password); // 添加调试日志
+            
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) {
-                return rs.getInt(1) > 0; // 如果存在符合条件的记录，返回 true
+                int count = rs.getInt(1);
+                System.out.println("查询结果: count=" + count); // 添加调试日志
+                return count > 0;
             }
         } catch (SQLException e) {
+            System.out.println("数据库验证出错:"); // 添加调试日志
             e.printStackTrace();
         }
-        return false; // 如果查询失败或用户不存在，返回 false
+        return false;
     }
 
     // 添加新方法来获取历史消息
     public List<String> getHistoryMessages(String username) {
         List<String> messages = new ArrayList<>();
+        System.out.println("获取用户历史消息: " + username); // 调试日志
+        
         // 获取所有群聊消息和与该用户相关的私聊消息
         String sql = "SELECT create_time, sender, receiver, message FROM chat " +
                     "WHERE receiver = 'all' OR receiver = ? OR sender = ? " +
                     "ORDER BY create_time ASC";
+        
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, username);
             pstmt.setString(2, username);
+            System.out.println("执行SQL: " + sql); // 调试日志
+            
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
                     String time = rs.getString("create_time");
@@ -137,16 +149,21 @@ public class Mysql {
                     String receiver = rs.getString("receiver");
                     String message = rs.getString("message");
                     
+                    String formattedMessage;
                     if (receiver.equals("all")) {
-                        messages.add(String.format("[%s] %s: %s", time, sender, message));
+                        formattedMessage = String.format("[%s] %s: %s", time, sender, message);
                     } else {
-                        messages.add(String.format("[%s] %s (私聊): %s", time, sender, message));
+                        formattedMessage = String.format("[%s] %s (私聊): %s", time, sender, message);
                     }
+                    messages.add(formattedMessage);
+                    System.out.println("添加历史消息: " + formattedMessage); // 调试日志
                 }
             }
         } catch (SQLException e) {
+            System.out.println("获取历史消息出错:"); // 调试日志
             e.printStackTrace();
         }
+        
         return messages;
     }
 

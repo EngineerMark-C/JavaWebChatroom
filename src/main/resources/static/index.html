@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>聊天室客户端</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- 登录界面 -->
+    <div id="loginPanel" class="panel">
+        <div class="login-container">
+            <h2>聊天室登录</h2>
+            <input type="text" id="username" placeholder="用户名">
+            <input type="password" id="password" placeholder="密码">
+            <button onclick="startClient()">启动客户端并登录</button>
+            <button onclick="showRegister()">注册</button>
+        </div>
+    </div>
+
+    <!-- 注册界面 -->
+    <div id="registerPanel" class="panel" style="display: none;">
+        <div class="login-container">
+            <h2>用户注册</h2>
+            <input type="text" id="regUsername" placeholder="用户名">
+            <input type="password" id="regPassword" placeholder="密码">
+            <input type="password" id="confirmPassword" placeholder="确认密码">
+            <button onclick="register()">注册</button>
+            <button onclick="showLogin()">返回登录</button>
+        </div>
+    </div>
+
+<!-- 聊天室主界面 -->
+<div id="chatPanel" class="panel" style="display: none;">
+    <div class="chat-container">
+        <div class="sidebar">
+            <div class="user-info">
+                欢迎, <span id="currentUser"></span>
+            </div>
+            <div class="online-users">
+                <h3>在线用户</h3>
+                <ul id="userList"></ul>
+            </div>
+        </div>
+        <div class="main-chat">
+            <div class="chat-messages" id="messageArea"></div>
+            <div class="chat-input">
+                <select id="receiverSelect">
+                    <option value="all">所有人</option>
+                </select>
+                <input type="text" id="messageInput" placeholder="输入消息...">
+                <button onclick="sendMessage()">发送</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <script src="js/chat.js"></script>
+</body>
+</html> 
