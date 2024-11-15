@@ -111,9 +111,18 @@ public class Server {
                 synchronized (clients) {
                     if (!clients.containsKey(name)) {
                         this.username = name;
-                        clients.put(username, out); // 存储用户输出流
+                        clients.put(username, out);
                         broadcast(username + " 加入了聊天！", null);
                         out.println("登录成功，欢迎进入聊天室！");
+                        
+                        // 发送历史消息
+                        out.println("=== 历史消息开始 ===");
+                        List<String> historyMessages = db.getHistoryMessages(username);
+                        for (String msg : historyMessages) {
+                            out.println(msg);
+                        }
+                        out.println("=== 历史消息结束 ===");
+                        
                         return true;
                     } else {
                         out.println("用户已在线，请换个名字！");
@@ -128,9 +137,10 @@ public class Server {
         private void sendMessage(String receiver, String message) {
             synchronized (clients) {
                 PrintWriter recipientOut = clients.get(receiver);
+                String timestamp = db.insertMessage(username, receiver, message);
                 if (recipientOut != null) {
-                    recipientOut.println(username + " (私聊): " + message);
-                    out.println("发送给 " + receiver + ": " + message);
+                    recipientOut.println(String.format("[%s] %s (私聊): %s", timestamp, username, message));
+                    out.println(String.format("[%s] 发送给 %s: %s", timestamp, receiver, message));
                 } else {
                     out.println("用户 " + receiver + " 不在线！");
                 }
@@ -138,6 +148,12 @@ public class Server {
         }
 
         private void broadcast(String message, String excludeUser) {
+            String timestamp = "";
+            if (excludeUser != null) {  // 只有实际聊天消息才需要存储和显示时间戳
+                timestamp = db.insertMessage(username, "all", message);
+                message = String.format("[%s] %s", timestamp, message);
+            }
+            
             synchronized (clients) {
                 for (Map.Entry<String, PrintWriter> client : clients.entrySet()) {
                     if (!client.getKey().equals(excludeUser)) {

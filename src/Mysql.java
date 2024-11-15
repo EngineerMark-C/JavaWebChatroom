@@ -1,4 +1,6 @@
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Mysql {
     // JDBC 驱动名及数据库 URL
@@ -57,19 +59,32 @@ public class Mysql {
     }
 
     // 插入消息
-    public boolean insertMessage(String sender, String receiver, String message) {
+    public String insertMessage(String sender, String receiver, String message) {
         String sql = "INSERT INTO chat (create_time, sender, receiver, messageLen, message) VALUES (NOW(), ?, ?, ?, ?)";
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        String timestamp = "";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             pstmt.setString(1, sender);
             pstmt.setString(2, receiver);
             pstmt.setString(3, String.valueOf(message.length()));
             pstmt.setString(4, message);
-            int rows = pstmt.executeUpdate();
-            return rows > 0;
+            pstmt.executeUpdate();
+            
+            // 获取插入消息的时间戳
+            try (ResultSet rs = pstmt.getGeneratedKeys()) {
+                if (rs.next()) {
+                    String timeSql = "SELECT create_time FROM chat WHERE id = LAST_INSERT_ID()";
+                    try (Statement stmt = conn.createStatement();
+                         ResultSet timeRs = stmt.executeQuery(timeSql)) {
+                        if (timeRs.next()) {
+                            timestamp = timeRs.getString(1);
+                        }
+                    }
+                }
+            }
         } catch (SQLException e) {
             e.printStackTrace();
-            return false;
         }
+        return timestamp;
     }
 
     // 查询消息
@@ -103,6 +118,36 @@ public class Mysql {
             e.printStackTrace();
         }
         return false; // 如果查询失败或用户不存在，返回 false
+    }
+
+    // 添加新方法来获取历史消息
+    public List<String> getHistoryMessages(String username) {
+        List<String> messages = new ArrayList<>();
+        // 获取所有群聊消息和与该用户相关的私聊消息
+        String sql = "SELECT create_time, sender, receiver, message FROM chat " +
+                    "WHERE receiver = 'all' OR receiver = ? OR sender = ? " +
+                    "ORDER BY create_time ASC";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, username);
+            pstmt.setString(2, username);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    String time = rs.getString("create_time");
+                    String sender = rs.getString("sender");
+                    String receiver = rs.getString("receiver");
+                    String message = rs.getString("message");
+                    
+                    if (receiver.equals("all")) {
+                        messages.add(String.format("[%s] %s: %s", time, sender, message));
+                    } else {
+                        messages.add(String.format("[%s] %s (私聊): %s", time, sender, message));
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return messages;
     }
 
     // 关闭数据库连接
