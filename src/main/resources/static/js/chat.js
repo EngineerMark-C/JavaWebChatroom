@@ -33,11 +33,9 @@ function startClient() {
             const response = JSON.parse(message);
             
             // 避免重复处理相同的聊天消息
-            if (response.type === 'chat' && response.sender === currentUser) {
-                // 只处理确认消息
-                if (response.receiver !== 'all') {
-                    displayMessage(response);
-                }
+            if (response.type === 'chat' && response.sender === currentUser && response.receiver !== 'all') {
+                // 只处理私聊的确认消息
+                displayMessage(response);
             } else {
                 // 处理其他所有消息
                 switch(response.type) {

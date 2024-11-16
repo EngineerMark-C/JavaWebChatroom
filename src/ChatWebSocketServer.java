@@ -29,6 +29,8 @@ public class ChatWebSocketServer extends WebSocketServer {
         if (username != null) {
             webSocketClients.remove(username);
             broadcastMessage(createMessage("system", "all", username + " 离开了聊天室"));
+            // 添加用户退出日志
+            Server.addLog(username + " 退出了聊天室", "user");
         }
     }
 
@@ -100,6 +102,8 @@ public class ChatWebSocketServer extends WebSocketServer {
 
         if ("all".equals(data.receiver)) {
             broadcastMessage(response);
+            // 添加群聊日志
+            Server.addLog(data.sender + " 发送群聊消息: " + data.content, "chat");
         } else {
             // 私聊消息
             WebSocket receiverConn = webSocketClients.get(data.receiver);
@@ -111,6 +115,8 @@ public class ChatWebSocketServer extends WebSocketServer {
             if (senderConn != null && senderConn.isOpen()) {
                 senderConn.send(gson.toJson(response));
             }
+            // 添加私聊日志
+            Server.addLog(data.sender + " 向 " + data.receiver + " 发送私聊消息: " + data.content, "chat");
         }
     }
 

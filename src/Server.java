@@ -3,14 +3,17 @@ import com.google.gson.JsonSyntaxException;
 
 import java.io.*;
 import java.net.*;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 public class Server {
     private static final int SOCKET_PORT = 12345;
-    private static final int WEBSOCKET_PORT = 8080;
+    public static final int WEBSOCKET_PORT = 8080;
     private static final int HTTP_PORT = 8081;
     private static Mysql db; // 数据库实例
     private static Map<String, PrintWriter> clients = new HashMap<>(); // 在线用户映射
+    private static List<LogEntry> serverLogs = new ArrayList<>();
+    private static final int MAX_LOGS = 100;
 
     public static void main(String[] args) {
         // 启动HTTP服务器
@@ -101,6 +104,7 @@ static class ClientHandler extends Thread {
                         offlineMessage.content = username + " 离开了聊天室";
                         broadcastMessage(offlineMessage);
                         broadcastOnlineUsers();
+                        Server.addLog(username + " 退出了聊天室", "user");
                     }
                 }
                 socket.close();
@@ -156,6 +160,7 @@ static class ClientHandler extends Thread {
             response.type = "system";
             response.content = "注册成功";
             out.println(new Gson().toJson(response));
+            Server.addLog("新用户 " + data.username + " 注册成功", "system");
         } else {
             System.out.println("注册失败：用户名=" + data.username);
             // 注册失败，发送错误消息
@@ -210,26 +215,29 @@ static class ClientHandler extends Thread {
             historyMessage.content = msg;
             out.println(new Gson().toJson(historyMessage));
         }
+        Server.addLog(data.username + " 登录成功", "user");
     }
 
     private void handleChat(MessageData data) {
-        data.sender = username; // 设置发送者
+        data.sender = username;
         if (data.receiver != null && !data.receiver.isEmpty() && !data.receiver.equals("all")) {
             // 私聊消息
             privateMessage(data);
+            // 添加日志，包含具体聊天内容
+            Server.addLog(data.sender + " 向 " + data.receiver + " 发送私聊消息: " + data.content, "chat");
         } else {
             // 群聊消息
             data.receiver = "all";
             data.timestamp = db.insertMessage(data.sender, "all", data.content);
-            broadcastMessage(data);
-            
-            // 发送确认消息给发送者
-            MessageData confirmMessage = new MessageData();
-            confirmMessage.type = "chat";
-            confirmMessage.content = data.content;
-            confirmMessage.sender = data.sender;
-            confirmMessage.timestamp = data.timestamp;
-            out.println(new Gson().toJson(confirmMessage));
+            // 发送给所有人（包括发送者）
+            String messageJson = new Gson().toJson(data);
+            synchronized (clients) {
+                for (PrintWriter writer : clients.values()) {
+                    writer.println(messageJson);
+                }
+            }
+            // 添加日志，包含具体聊天内容
+            Server.addLog(data.sender + " 发送群聊消息: " + data.content, "chat");
         }
     }
 
@@ -309,5 +317,41 @@ static class ClientHandler extends Thread {
         String content;     // 消息内容
         String timestamp;   // 时间戳
         List<String> users; // 在线用户列表
+    }
+
+    public static void addLog(String message, String type) {
+        LogEntry log = new LogEntry(message, type);
+        synchronized (serverLogs) {
+            serverLogs.add(0, log);
+            if (serverLogs.size() > MAX_LOGS) {
+                serverLogs.remove(serverLogs.size() - 1);
+            }
+        }
+    }
+
+    public static int getOnlineCount() {
+        return clients.size();
+    }
+
+    public static List<String> getOnlineUsers() {
+        return new ArrayList<>(clients.keySet());
+    }
+
+    public static List<LogEntry> getServerLogs() {
+        synchronized (serverLogs) {
+            return new ArrayList<>(serverLogs);
+        }
+    }
+
+    public static class LogEntry {
+        String timestamp;
+        String message;
+        String type;
+
+        LogEntry(String message, String type) {
+            this.timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+            this.message = message;
+            this.type = type;
+        }
     }
 }
