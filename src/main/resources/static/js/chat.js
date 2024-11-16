@@ -12,7 +12,7 @@ function startClient() {
     }
 
     // 连接到WebSocket代理
-    socket = new WebSocket('ws://localhost:8080');
+    socket = new WebSocket('ws://' + window.location.hostname + ':8080');
 
     socket.onopen = function() {
         console.log('连接到服务器');
@@ -77,31 +77,41 @@ function startClient() {
 }
 
 function updateOnlineUsers(users) {
+    if (!Array.isArray(users)) {
+        console.error('收到的用户列表格式不正确:', users);
+        return;
+    }
+    
     onlineUsers = new Set(users);
     const userList = document.getElementById('userList');
     const receiverSelect = document.getElementById('receiverSelect');
     
-    // 更新侧边栏用户列表
+    // 清空现有列表
     userList.innerHTML = '';
+    receiverSelect.innerHTML = '<option value="all">所有人</option>';
+    
+    // 更新用户列表
     users.forEach(user => {
         if (user !== currentUser) {
+            // 添加到侧边栏列表
             const li = document.createElement('li');
             li.textContent = user;
             li.onclick = () => setReceiver(user);
             userList.appendChild(li);
-        }
-    });
-    
-    // 更新接收者下拉列表
-    receiverSelect.innerHTML = '<option value="all">所有人</option>';
-    users.forEach(user => {
-        if (user !== currentUser) {
+            
+            // 添加到接收者下拉列表
             const option = document.createElement('option');
             option.value = user;
             option.textContent = user;
             receiverSelect.appendChild(option);
         }
     });
+    
+    // 更新在线人数显示
+    const onlineCount = document.getElementById('onlineCount');
+    if (onlineCount) {
+        onlineCount.textContent = users.length;
+    }
 }
 
 // 设置接收者的函数
@@ -188,7 +198,7 @@ function register() {
     }
 
     // 连接到服务器进行注册
-    const socket = new WebSocket('ws://localhost:8080');
+    const socket = new WebSocket('ws://' + window.location.hostname + ':8080');
     
     socket.onopen = function() {
         const registerMessage = JSON.stringify({
@@ -200,12 +210,26 @@ function register() {
     };
 
     socket.onmessage = function(event) {
-        const message = event.data;
-        alert(message);
-        if (message.includes('注册成功')) {
-            showLogin();
+        try {
+            const response = JSON.parse(event.data);
+            if (response.type === 'system') {
+                alert(response.content);
+                if (response.content === '注册成功') {
+                    showLogin();
+                }
+            } else if (response.type === 'error') {
+                alert(response.content);
+            }
+            socket.close();
+        } catch (e) {
+            console.error('解析消息错误:', e);
+            alert('注册过程发生错误');
         }
-        socket.close();
+    };
+
+    socket.onerror = function(error) {
+        console.error('WebSocket错误:', error);
+        alert('连接错误，请重试');
     };
 }
 

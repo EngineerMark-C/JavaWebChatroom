@@ -4,23 +4,28 @@ import org.java_websocket.server.WebSocketServer;
 import com.google.gson.Gson;
 import java.net.InetSocketAddress;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ChatWebSocketServer extends WebSocketServer {
-    private static Map<String, WebSocket> webSocketClients = new HashMap<>();
+    private static Map<String, WebSocket> webSocketClients = new ConcurrentHashMap<>();
     private static Mysql db;
     private Gson gson = new Gson();
+    private static int serverPort;
 
-    public ChatWebSocketServer(int port) {
-        super(new InetSocketAddress(port));
+    public ChatWebSocketServer(int port, String bindAddress) {
+        super(new InetSocketAddress(bindAddress, port));
+        ChatWebSocketServer.serverPort = port;
         db = new Mysql();
         setConnectionLostTimeout(0);
+    }
+
+    public static int getServerPort() {
+        return serverPort;
     }
 
     @Override
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
         System.out.println("新的WebSocket连接：" + conn.getRemoteSocketAddress());
-        MessageData response = createMessage("system", "all", "连接成功");
-        conn.send(gson.toJson(response));
     }
 
     @Override
@@ -29,6 +34,8 @@ public class ChatWebSocketServer extends WebSocketServer {
         if (username != null) {
             webSocketClients.remove(username);
             broadcastMessage(createMessage("system", "all", username + " 离开了聊天室"));
+            // 广播更新后的在线用户列表
+            broadcastOnlineUsers();
             // 添加用户退出日志
             Server.addLog(username + " 退出了聊天室", "user");
         }
@@ -61,36 +68,61 @@ public class ChatWebSocketServer extends WebSocketServer {
 
     private void handleLogin(WebSocket conn, MessageData data) {
         if (db.validateLogin(data.username, data.password)) {
-            if (!webSocketClients.containsKey(data.username)) {
-                webSocketClients.put(data.username, conn);
-                
-                // 发送登录成功消息
-                conn.send(gson.toJson(createMessage("system", data.username, "登录成功")));
-                
-                // 发送历史消息
-                List<String> history = db.getHistoryMessages(data.username);
-                for (String msg : history) {
-                    conn.send(gson.toJson(createMessage("history", data.username, msg)));
-                }
-                
-                // 广播新用户加入
-                broadcastMessage(createMessage("system", "all", data.username + " 加入了聊天室"));
-            } else {
+            // 检查是否已经有相同用户名的连接
+            WebSocket existingConn = webSocketClients.get(data.username);
+            if (existingConn != null && existingConn.isOpen()) {
                 conn.send(gson.toJson(createMessage("error", data.username, "用户已在线")));
+                return;
             }
+
+            // 先移除旧的连接（如果有）
+            webSocketClients.remove(data.username);
+            // 添加新的连接
+            webSocketClients.put(data.username, conn);
+
+            // 发送登录成功消息
+            conn.send(gson.toJson(createMessage("system", data.username, "登录成功")));
+
+            // 发送历史消息
+            List<String> history = db.getHistoryMessages(data.username);
+            for (String msg : history) {
+                conn.send(gson.toJson(createMessage("history", data.username, msg)));
+            }
+
+            // 广播新用户加入
+            broadcastMessage(createMessage("system", "all", data.username + " 加入了聊天室"));
+
+            // 广播在线用户列表
+            broadcastOnlineUsers();
+
+            // 添加登录日志
+            Server.addLog(data.username + " 登录成功", "user");
         } else {
             conn.send(gson.toJson(createMessage("error", data.username, "登录失败")));
         }
     }
+
+    private void broadcastOnlineUsers() {
+        MessageData message = new MessageData();
+        message.type = "online_users";
+        message.users = new ArrayList<>(webSocketClients.keySet());
+        broadcastMessage(message);
+    }
     
     private void handleRegister(WebSocket conn, MessageData data) {
-        System.out.println("收到注册请求：用户名=" + data.username + "，密码=" + data.password);
+        System.out.println("收到注册请求：用户名=" + data.username);
         if (db.insert(data.username, data.password)) {
             System.out.println("注册成功：用户名=" + data.username);
-            conn.send(gson.toJson(createMessage("system", data.username, "注册成功")));
+            // 添加系统日志
+            Server.addLog(data.username + " 注册成功", "system");
+            // 发送注册成功消息
+            MessageData response = createMessage("system", data.username, "注册成功");
+            conn.send(gson.toJson(response));
         } else {
             System.out.println("注册失败：用户名=" + data.username);
-            conn.send(gson.toJson(createMessage("error", data.username, "注册失败，用户名已存在")));
+            MessageData response = createMessage("error", data.username, "注册失败，用户名已存在");
+            conn.send(gson.toJson(response));
+            Server.addLog(data.username + " 注册失败", "error");
         }
     }
 
@@ -158,12 +190,13 @@ public class ChatWebSocketServer extends WebSocketServer {
 
     @Override
     public void onStart() {
-        System.out.println("WebSocket服务器启动在端口：" + getPort());
+        System.out.println("WebSocket服务器启动在端口：" + getServerPort());
         setConnectionLostTimeout(0);
     }
 
     // 消息数据类
     private static class MessageData {
+        public ArrayList<String> users;
         String type;
         String username;
         String password;
@@ -171,5 +204,13 @@ public class ChatWebSocketServer extends WebSocketServer {
         String receiver;
         String content;
         String timestamp;
+    }
+
+    public static int getOnlineCount() {
+        return webSocketClients.size();
+    }
+
+    public static List<String> getOnlineUsers() {
+        return new ArrayList<>(webSocketClients.keySet());
     }
 }

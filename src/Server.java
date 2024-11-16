@@ -25,10 +25,8 @@ public class Server {
             e.printStackTrace();
         }
 
-        // 启动WebSocket代理服务器（用于Web客户端）
-        WebSocketProxy wsProxy = new WebSocketProxy(WEBSOCKET_PORT);
-        wsProxy.start();
-        System.out.println("WebSocket代理服务器启动在端口: " + WEBSOCKET_PORT);
+        ChatWebSocketServer wsServer = new ChatWebSocketServer(WEBSOCKET_PORT, "0.0.0.0");
+        wsServer.start();
 
         // 启动传统Socket服务器
         ServerSocket serverSocket = null;
@@ -58,7 +56,7 @@ public class Server {
                 if (db != null) {
                     db.close();
                 }
-                wsProxy.stop(1000); // 添加超时参数
+                wsServer.stop(1000); // 添加超时参数
             } catch (IOException e) {
                 System.out.println("服务器关闭时发生错误：");
                 e.printStackTrace();
@@ -320,36 +318,33 @@ static class ClientHandler extends Thread {
     }
 
     public static void addLog(String message, String type) {
-        LogEntry log = new LogEntry(message, type);
-        synchronized (serverLogs) {
-            serverLogs.add(0, log);
-            if (serverLogs.size() > MAX_LOGS) {
-                serverLogs.remove(serverLogs.size() - 1);
-            }
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        LogEntry log = new LogEntry(sdf.format(new Date()), message, type);
+        serverLogs.add(0, log); // 新日志添加到开头
+        if (serverLogs.size() > MAX_LOGS) {
+            serverLogs.remove(serverLogs.size() - 1);
         }
     }
 
     public static int getOnlineCount() {
-        return clients.size();
+        return ChatWebSocketServer.getOnlineCount();
     }
 
     public static List<String> getOnlineUsers() {
-        return new ArrayList<>(clients.keySet());
+        return ChatWebSocketServer.getOnlineUsers();
     }
 
-    public static List<LogEntry> getServerLogs() {
-        synchronized (serverLogs) {
-            return new ArrayList<>(serverLogs);
-        }
+    public static List<LogEntry> getLogs() {
+        return new ArrayList<>(serverLogs);
     }
 
     public static class LogEntry {
-        String timestamp;
-        String message;
-        String type;
+        public String timestamp;
+        public String message;
+        public String type;
 
-        LogEntry(String message, String type) {
-            this.timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+        public LogEntry(String timestamp, String message, String type) {
+            this.timestamp = timestamp;
             this.message = message;
             this.type = type;
         }

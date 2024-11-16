@@ -129,50 +129,44 @@
     <script>
         function updateServerStatus() {
             fetch('/api/server_status')
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json();
-                })
+                .then(response => response.json())
                 .then(data => {
                     // 更新状态面板
                     document.getElementById('ipAddress').textContent = data.ipAddress;
                     document.getElementById('port').textContent = data.port;
-                    document.getElementById('onlineCount').textContent = data.onlineCount;
+                    document.getElementById('onlineCount').textContent = data.onlineCount || 0;
                     
                     // 更新在线用户列表
                     const userList = document.getElementById('userList');
                     userList.innerHTML = '';
-                    data.onlineUsers.forEach(user => {
-                        const userTag = document.createElement('div');
-                        userTag.className = 'user-tag';
-                        userTag.textContent = user;
-                        userList.appendChild(userTag);
-                    });
+                    if (data.onlineUsers && Array.isArray(data.onlineUsers)) {
+                        data.onlineUsers.forEach(user => {
+                            const userTag = document.createElement('div');
+                            userTag.className = 'user-tag';
+                            userTag.textContent = user;
+                            userList.appendChild(userTag);
+                        });
+                    }
                     
                     // 更新日志
                     const logContainer = document.getElementById('logContainer');
                     logContainer.innerHTML = '';
-                    data.logs.forEach(log => {
-                        const logEntry = document.createElement('div');
-                        logEntry.className = `log-entry ${log.type}`;
-                        logEntry.textContent = `[${log.timestamp}] ${log.message}`;
-                        logContainer.appendChild(logEntry);
-                    });
-                    
-                    // 自动滚动到最新日志
-                    logContainer.scrollTop = logContainer.scrollHeight;
+                    if (data.logs && Array.isArray(data.logs)) {
+                        data.logs.forEach(log => {
+                            const logEntry = document.createElement('div');
+                            logEntry.className = `log-entry ${log.type}`;
+                            logEntry.textContent = `[${log.timestamp}] ${log.message}`;
+                            logContainer.appendChild(logEntry);
+                        });
+                    }
                 })
                 .catch(error => {
                     console.error('获取服务器状态失败:', error);
-                    // 可以在界面上显示错误信息
-                    document.getElementById('errorMessage').textContent = '获取服务器状态失败，将在下次更新时重试...';
                 });
         }
 
-        // 每3秒更新一次服务器状态（增加间隔时间以减少服务器负载）
-        setInterval(updateServerStatus, 3000);
+        // 每1秒更新一次服务器状态
+        setInterval(updateServerStatus, 1000);
         // 初始加载
         updateServerStatus();
     </script>
