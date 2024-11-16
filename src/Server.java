@@ -1,3 +1,6 @@
+import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -27,11 +30,11 @@ public class Server {
         // 启动传统Socket服务器
         ServerSocket serverSocket = null;
         db = new Mysql();
-        
+
         try {
             serverSocket = new ServerSocket(SOCKET_PORT);
             System.out.println("Socket服务器启动，等待客户端连接...");
-            
+
             while (true) {
                 try {
                     Socket clientSocket = serverSocket.accept();
@@ -64,132 +67,247 @@ public class Server {
         }
     }
 
-    // ClientHandler 内部类
-    static class ClientHandler extends Thread {
-        private Socket socket;
-        private PrintWriter out;
-        private BufferedReader in;
-        private String username;
+// 客户端处理类
+static class ClientHandler extends Thread {
+    private Socket socket;
+    private PrintWriter out;
+    private BufferedReader in;
+    private String username;
 
-        public ClientHandler(Socket socket) {
-            this.socket = socket;
-        }
+    public ClientHandler(Socket socket) {
+        this.socket = socket;
+    }
 
-        @Override
-        public void run() {
+    @Override
+    public void run() {
+        try {
+            out = new PrintWriter(socket.getOutputStream(), true);
+            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+            String inputLine;
+            while ((inputLine = in.readLine()) != null) {
+                System.out.println("收到Socket消息：" + inputLine);
+                handleMessage(inputLine);
+            }
+        } catch (IOException e) {
+            System.out.println("客户端连接异常：" + e.getMessage());
+        } finally {
             try {
-                out = new PrintWriter(socket.getOutputStream(), true);
-                in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-
-                // 处理登录
-                username = in.readLine();
-                String password = in.readLine();
-                
-                if (username == null || password == null) {
-                    return;
-                }
-
-                // 验证登录
-                if (!db.validateLogin(username, password)) {
-                    out.println("登录失败：用户名或密码错误");
-                    return;
-                }
-
                 synchronized (clients) {
-                    if (clients.containsKey(username)) {
-                        out.println("登录失败：该用户已在线");
-                        return;
-                    }
-                    clients.put(username, out);
-                }
-
-                // 发送登录成功消息
-                out.println("登录成功");
-                broadcast(username + " 加入了聊天室", null);
-                broadcastOnlineUsers(); // 广播在线用户列表
-
-                // 发送历史消息
-                out.println("=== 历史消息开始 ===");
-                List<String> history = db.getHistoryMessages(username);
-                for (String msg : history) {
-                    out.println(msg);
-                }
-                out.println("=== 历史消息结束 ===");
-
-                // 处理消息
-                String message;
-                while ((message = in.readLine()) != null) {
-                    if (message.startsWith("@")) {
-                        // 私聊消息
-                        int spaceIndex = message.indexOf(" ");
-                        if (spaceIndex != -1) {
-                            String receiver = message.substring(1, spaceIndex);
-                            String content = message.substring(spaceIndex + 1);
-                            privateMessage(username, receiver, content);
-                        }
-                    } else {
-                        // 群聊消息
-                        String timestamp = db.insertMessage(username, "all", message);
-                        broadcast(username + ": " + message, username, timestamp);
-                        out.println(String.format("[%s] 你: %s", timestamp, message));
+                    if (username != null) {
+                        clients.remove(username);
+                        MessageData offlineMessage = new MessageData();
+                        offlineMessage.type = "system";
+                        offlineMessage.content = username + " 离开了聊天室";
+                        broadcastMessage(offlineMessage);
+                        broadcastOnlineUsers();
                     }
                 }
+                socket.close();
             } catch (IOException e) {
-                System.out.println("客户端连接异常：" + e.getMessage());
-            } finally {
-                try {
-                    synchronized (clients) {
-                        if (username != null) {
-                            clients.remove(username);
-                            broadcast(username + " 离开了聊天室", null);
-                            broadcastOnlineUsers(); // 广播在线用户列表
-                        }
-                    }
-                    socket.close();
-                } catch (IOException e) {
-                    System.out.println("关闭socket时发生错误：" + e.getMessage());
-                }
+                System.out.println("关闭socket时发生错误：" + e.getMessage());
             }
         }
+    }
 
-        private void privateMessage(String sender, String receiver, String message) {
-            PrintWriter recipientOut = clients.get(receiver);
-            String timestamp = db.insertMessage(sender, receiver, message);
-            if (recipientOut != null) {
-                recipientOut.println(String.format("[%s] %s (私聊): %s", timestamp, sender, message));
-                out.println(String.format("[%s] 发送给 %s: %s", timestamp, receiver, message));
-            } else {
-                out.println("用户 " + receiver + " 不在线！");
+    private void handleMessage(String message) {
+        try {
+            MessageData messageData = new Gson().fromJson(message, MessageData.class);
+            if (messageData == null || messageData.type == null) {
+                throw new JsonSyntaxException("Invalid message format");
             }
+
+            switch (messageData.type) {
+                case "register":
+                    handleRegister(messageData);
+                    break;
+                case "login":
+                    handleLogin(messageData);
+                    break;
+                case "chat":
+                    handleChat(messageData);
+                    break;
+                default:
+                    sendError("未知的消息类型");
+                    break;
+            }
+        } catch (JsonSyntaxException e) {
+            System.out.println("JSON解析错误：" + e.getMessage());
+            sendError("消息格式错误");
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendError("服务器内部错误");
+        }
+    }
+
+    private void sendError(String message) {
+        MessageData response = new MessageData();
+        response.type = "error";
+        response.content = message;
+        out.println(new Gson().toJson(response));
+    }
+
+    private void handleRegister(MessageData data) {
+        System.out.println("收到注册请求：用户名=" + data.username + "，密码=" + data.password);
+        if (db.insert(data.username, data.password)) {
+            System.out.println("注册成功：用户名=" + data.username);
+            // 注册成功，发送系统消息
+            MessageData response = new MessageData();
+            response.type = "system";
+            response.content = "注册成功";
+            out.println(new Gson().toJson(response));
+        } else {
+            System.out.println("注册失败：用户名=" + data.username);
+            // 注册失败，发送错误消息
+            MessageData response = new MessageData();
+            response.type = "error";
+            response.content = "注册失败，用户名已存在";
+            out.println(new Gson().toJson(response));
+        }
+    }
+
+    private void handleLogin(MessageData data) {
+        if (!db.validateLogin(data.username, data.password)) {
+            MessageData response = new MessageData();
+            response.type = "error";
+            response.content = "登录失败：用户名或密码错误";
+            out.println(new Gson().toJson(response));
+            return;
         }
 
-        private void broadcast(String message, String excludeUser, String timestamp) {
-            String formattedMessage = message;
-            if (timestamp != null) {
-                formattedMessage = String.format("[%s] %s", timestamp, message);
+        synchronized (clients) {
+            if (clients.containsKey(data.username)) {
+                MessageData response = new MessageData();
+                response.type = "error";
+                response.content = "登录失败：该用户已在线";
+                out.println(new Gson().toJson(response));
+                return;
             }
+            clients.put(data.username, out);
+            username = data.username;
+        }
+
+        // 登录成功消息
+        MessageData loginSuccess = new MessageData();
+        loginSuccess.type = "system";
+        loginSuccess.content = "登录成功";
+        out.println(new Gson().toJson(loginSuccess));
+
+        // 广播新用户加入
+        MessageData joinMessage = new MessageData();
+        joinMessage.type = "system";
+        joinMessage.content = username + " 加入了聊天室";
+        broadcast(joinMessage.content, username);
+
+        // 广播在线用户列表
+        broadcastOnlineUsers();
+
+        // 发送历史消息
+        List<String> history = db.getHistoryMessages(username);
+        for (String msg : history) {
+            MessageData historyMessage = new MessageData();
+            historyMessage.type = "history";
+            historyMessage.content = msg;
+            out.println(new Gson().toJson(historyMessage));
+        }
+    }
+
+    private void handleChat(MessageData data) {
+        data.sender = username; // 设置发送者
+        if (data.receiver != null && !data.receiver.isEmpty() && !data.receiver.equals("all")) {
+            // 私聊消息
+            privateMessage(data);
+        } else {
+            // 群聊消息
+            data.receiver = "all";
+            data.timestamp = db.insertMessage(data.sender, "all", data.content);
+            broadcastMessage(data);
             
-            synchronized (clients) {
-                for (Map.Entry<String, PrintWriter> client : clients.entrySet()) {
-                    if (!client.getKey().equals(excludeUser)) {
-                        client.getValue().println(formattedMessage);
-                    }
+            // 发送确认消息给发送者
+            MessageData confirmMessage = new MessageData();
+            confirmMessage.type = "chat";
+            confirmMessage.content = data.content;
+            confirmMessage.sender = data.sender;
+            confirmMessage.timestamp = data.timestamp;
+            out.println(new Gson().toJson(confirmMessage));
+        }
+    }
+
+    private void privateMessage(MessageData data) {
+        PrintWriter recipientOut;
+        synchronized (clients) {
+            recipientOut = clients.get(data.receiver);
+        }
+        
+        data.timestamp = db.insertMessage(data.sender, data.receiver, data.content);
+        String messageJson = new Gson().toJson(data);
+        
+        if (recipientOut != null) {
+            // 发送给接收者
+            recipientOut.println(messageJson);
+            // 发送给发送者的确认
+            out.println(messageJson);
+        } else {
+            // 接收者不在线
+            MessageData errorResponse = new MessageData();
+            errorResponse.type = "error";
+            errorResponse.content = "用户 " + data.receiver + " 不在线！";
+            out.println(new Gson().toJson(errorResponse));
+        }
+    }
+
+    // 重载的 broadcast 方法，不含 timestamp
+    private void broadcast(String message, String excludeUser) {
+        MessageData broadcastMessage = new MessageData();
+        broadcastMessage.type = "system";
+        broadcastMessage.content = message;
+        broadcastMessage.timestamp = new Date().toString();
+        broadcastMessage.sender = "系统";
+        broadcastMessage.receiver = "all";
+        
+        String messageJson = new Gson().toJson(broadcastMessage);
+        synchronized (clients) {
+            for (Map.Entry<String, PrintWriter> client : clients.entrySet()) {
+                if (!client.getKey().equals(excludeUser)) {
+                    client.getValue().println(messageJson);
                 }
             }
         }
+    }
 
-        private void broadcast(String message, String excludeUser) {
-            broadcast(message, excludeUser, null);
+    private void broadcastOnlineUsers() {
+        MessageData response = new MessageData();
+        response.type = "online_users";
+        synchronized (clients) {
+            response.users = new ArrayList<>(clients.keySet());
         }
-
-        // 在用户登录成功后广播在线用户列表
-        private void broadcastOnlineUsers() {
-            synchronized (clients) {
-                String userList = "ONLINE_USERS:" + String.join(",", clients.keySet());
-                for (PrintWriter writer : clients.values()) {
-                    writer.println(userList);
-                }
+        String messageJson = new Gson().toJson(response);
+        
+        synchronized (clients) {
+            for (PrintWriter writer : clients.values()) {
+                writer.println(messageJson);
             }
         }
+    }
+
+    private void broadcastMessage(MessageData message) {
+        String messageJson = new Gson().toJson(message);
+        synchronized (clients) {
+            for (PrintWriter writer : clients.values()) {
+                writer.println(messageJson);
+            }
+        }
+    }
+}
+
+    private static class MessageData {
+        String type;        // 消息类型：register/login/chat/system/error/online_users
+        String username;    // 用户名
+        String password;    // 密码
+        String sender;      // 发送者
+        String receiver;    // 接收者
+        String content;     // 消息内容
+        String timestamp;   // 时间戳
+        List<String> users; // 在线用户列表
     }
 }

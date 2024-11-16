@@ -47,9 +47,13 @@ public class ChatWebSocketServer extends WebSocketServer {
                 case "chat":
                     handleChat(messageData);
                     break;
+                default:
+                    conn.send(gson.toJson(createMessage("error", "system", "未知的消息类型")));
+                    break;
             }
         } catch (Exception e) {
             e.printStackTrace();
+            conn.send(gson.toJson(createMessage("error", "system", "消息处理错误")));
         }
     }
 
@@ -76,12 +80,15 @@ public class ChatWebSocketServer extends WebSocketServer {
             conn.send(gson.toJson(createMessage("error", data.username, "登录失败")));
         }
     }
-
+    
     private void handleRegister(WebSocket conn, MessageData data) {
+        System.out.println("收到注册请求：用户名=" + data.username + "，密码=" + data.password);
         if (db.insert(data.username, data.password)) {
+            System.out.println("注册成功：用户名=" + data.username);
             conn.send(gson.toJson(createMessage("system", data.username, "注册成功")));
         } else {
-            conn.send(gson.toJson(createMessage("error", data.username, "注册失败")));
+            System.out.println("注册失败：用户名=" + data.username);
+            conn.send(gson.toJson(createMessage("error", data.username, "注册失败，用户名已存在")));
         }
     }
 
@@ -152,11 +159,11 @@ public class ChatWebSocketServer extends WebSocketServer {
     // 消息数据类
     private static class MessageData {
         String type;
+        String username;
+        String password;
         String sender;
         String receiver;
         String content;
-        String username;
-        String password;
         String timestamp;
     }
 }

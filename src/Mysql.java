@@ -26,16 +26,15 @@ public class Mysql {
 
     // 插入用户
     public boolean insert(String name, String password) {
-
         if (isUsernameExists(name)) {
             return false; // 用户名已存在
         }
-        String sql = "INSERT INTO chatuser (name, create_time,password) VALUES (?, NOW(),?)";
+        String sql = "INSERT INTO chatuser (name, create_time, password) VALUES (?, NOW(), ?)";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, name);
             pstmt.setString(2, password);
-            int rows = pstmt.executeUpdate();
-            return rows > 0;
+            pstmt.executeUpdate();
+            return true;
         } catch (SQLException e) {
             e.printStackTrace();
             return false;
@@ -47,10 +46,10 @@ public class Mysql {
         String sql = "SELECT COUNT(*) FROM chatuser WHERE name = ?";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, name);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                int count = rs.getInt(1);
-                return count > 0; // 如果返回的 count 大于 0，表示用户名已经存在
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next() && rs.getInt(1) > 0) {
+                    return true;
+                }
             }
         } catch (SQLException e) {
             e.printStackTrace();

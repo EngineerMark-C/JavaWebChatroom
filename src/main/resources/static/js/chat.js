@@ -5,7 +5,7 @@ let onlineUsers = new Set();
 function startClient() {
     const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value.trim();
-    
+
     if (!username || !password) {
         alert('用户名和密码不能为空');
         return;
@@ -13,35 +13,57 @@ function startClient() {
 
     // 连接到WebSocket代理
     socket = new WebSocket('ws://localhost:8080');
-    
+
     socket.onopen = function() {
         console.log('连接到服务器');
-        // 发送登录信息
-        socket.send(username);
-        socket.send(password);
+        // 发送登录信息，使用JSON格式
+        const loginMessage = JSON.stringify({
+            type: 'login',
+            username: username,
+            password: password
+        });
+        socket.send(loginMessage);
     };
 
     socket.onmessage = function(event) {
         const message = event.data;
         console.log('收到消息:', message);
-        
-        // 处理在线用户列表
-        if (message.startsWith('ONLINE_USERS:')) {
-            updateOnlineUsers(message.substring(12).split(','));
-            return;
-        }
-        
-        if (message.includes('登录成功')) {
-            currentUser = username;
-            document.getElementById('currentUser').textContent = username;
-            showChatPanel();
-        } else if (message.includes('=== 历史消息开始 ===')) {
-            // 开始接收历史消息
-        } else if (message.includes('=== 历史消息结束 ===')) {
-            // 历史消息接收完毕
-        } else {
-            // 显示普通消息
-            displayMessage(message);
+8
+        try {
+            const response = JSON.parse(message);
+            
+            // 避免重复处理相同的聊天消息
+            if (response.type === 'chat' && response.sender === currentUser) {
+                // 只处理确认消息
+                if (response.receiver !== 'all') {
+                    displayMessage(response);
+                }
+            } else {
+                // 处理其他所有消息
+                switch(response.type) {
+                    case 'system':
+                        if (response.content.includes('登录成功')) {
+                            currentUser = username;
+                            document.getElementById('currentUser').textContent = username;
+                            showChatPanel();
+                        }
+                        displayMessage(response);
+                        break;
+                    case 'error':
+                        alert(response.content);
+                        break;
+                    case 'chat':
+                    case 'history':
+                        displayMessage(response);
+                        break;
+                    case 'online_users':
+                        updateOnlineUsers(response.users);
+                        break;
+                }
+            }
+        } catch (e) {
+            console.error('解析服务器消息时发生错误:', e);
+            console.log('原始消息:', message);
         }
     };
 
@@ -91,76 +113,59 @@ function setReceiver(username) {
 function sendMessage() {
     const messageInput = document.getElementById('messageInput');
     const receiverSelect = document.getElementById('receiverSelect');
-    const message = messageInput.value.trim();
+    const messageContent = messageInput.value.trim();
     const receiver = receiverSelect.value;
-    
-    if (!message) {
+
+    if (!messageContent) {
         return;
     }
-    
-    if (socket && socket.readyState === WebSocket.OPEN) {
-        if (receiver === 'all') {
-            socket.send(message);
-        } else {
-            socket.send(`@${receiver} ${message}`);
-        }
-        messageInput.value = '';
-    } else {
-        alert('未连接到服务器，请重新登录');
-    }
+
+    const chatMessage = {
+        type: 'chat',
+        sender: currentUser,
+        receiver: receiver,
+        content: messageContent
+    };
+
+    socket.send(JSON.stringify(chatMessage));
+    messageInput.value = '';
 }
 
 function displayMessage(message) {
     const messageArea = document.getElementById('messageArea');
     const messageDiv = document.createElement('div');
     
-    // 解析消息内容
-    let type = 'received'; // 默认为接收的消息
-    let content = message;
-    let timestamp = '';
-    let sender = '';
+    // 确定消息类型和样式
+    let type = 'received';
     
-    // 检查是否包含时间戳
-    if (message.includes('[') && message.includes(']')) {
-        timestamp = message.substring(message.indexOf('[') + 1, message.indexOf(']'));
-        content = message.substring(message.indexOf(']') + 1).trim();
+    // 如果消息发送者是当前用户，设置为发送样式
+    if (message.sender === currentUser) {
+        type = 'sent';
     }
     
-    // 检查是否是系统消息
-    if (content.includes('加入了聊天室') || 
-        content.includes('离开了聊天室') || 
-        content.startsWith('=== ')) {
+    // 如果是系统消息，设置为系统样式
+    if (message.type === 'system') {
         type = 'system';
     }
-    // 检查是否是发送的消息
-    else if (content.startsWith('你:') || content.startsWith(currentUser + ':')) {
-        type = 'sent';
-        content = content.substring(content.indexOf(':') + 1).trim();
-    }
-    // 其他情况为接收的消息
-    else if (content.includes(':')) {
-        sender = content.substring(0, content.indexOf(':'));
-        content = content.substring(content.indexOf(':') + 1).trim();
-    }
-
+    
     // 设置消息样式
     messageDiv.className = `message ${type}`;
-
-    // 创建消息内容
+    
+    // 构建消息HTML
     let html = '';
     
-    // 添加时间戳（如果存在）
-    if (timestamp) {
-        html += `<div class="timestamp">${timestamp}</div>`;
+    // 添加时间戳
+    if (message.timestamp) {
+        html += `<div class="timestamp">[${message.timestamp}]</div>`;
     }
     
-    // 添加发送者名称（如果存在且不是系统消息）
-    if (sender && type !== 'system') {
-        html += `<div class="sender-name">${sender}</div>`;
+    // 添加发送者名称（如果不是系统消息且不是自己发送的）
+    if (message.sender && type === 'received') {
+        html += `<div class="sender-name">${message.sender}</div>`;
     }
     
     // 添加消息内容
-    html += `<div class="message-content">${content}</div>`;
+    html += `<div class="message-content">${message.content}</div>`;
     
     messageDiv.innerHTML = html;
     messageArea.appendChild(messageDiv);
@@ -185,12 +190,15 @@ function register() {
     }
 
     // 连接到服务器进行注册
-    const socket = new WebSocket('ws://localhost:12345');
+    const socket = new WebSocket('ws://localhost:8080');
     
     socket.onopen = function() {
-        socket.send('register');
-        socket.send(username);
-        socket.send(password);
+        const registerMessage = JSON.stringify({
+            type: 'register',
+            username: username,
+            password: password
+        });
+        socket.send(registerMessage);
     };
 
     socket.onmessage = function(event) {
@@ -233,4 +241,4 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-}); 
+});

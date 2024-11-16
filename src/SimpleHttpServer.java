@@ -30,7 +30,7 @@ public class SimpleHttpServer {
                 exchange.sendResponseHeaders(200, file.length());
                 
                 try (OutputStream os = exchange.getResponseBody();
-                     FileInputStream fs = new FileInputStream(file)) {
+                    FileInputStream fs = new FileInputStream(file)) {
                     byte[] buffer = new byte[1024];
                     int count;
                     while ((count = fs.read(buffer)) != -1) {
